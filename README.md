@@ -1,12 +1,15 @@
 # Synthetic Alarm Panel for Home Assistant
 
-A simplified Home Assistant integration that provides a synthetic alarm control panel with UI configuration support. This integration creates a basic alarm panel entity that can be used for testing, development, or as a template for building more complex alarm systems.
+A comprehensive Home Assistant integration that provides a synthetic alarm control panel with full UI configuration support. This integration creates a feature-rich alarm panel entity that integrates with your existing Home Assistant scripts and devices.
 
 ## Features
 
-- **UI Configuration**: Easy setup through Home Assistant's integration UI
-- **Configurable Settings**: Customizable name, security code, timing settings
-- **Basic Alarm Functions**: Arm Home, Arm Away, Disarm
+- **Multi-Step UI Configuration**: Easy setup through Home Assistant's integration UI
+- **Script Integration**: Configure scripts for arm home, disarm home, arm away, and disarm away actions
+- **Device Indicators**: Configure LED indicators for armed and alarm states using any switch, light, or binary sensor
+- **Full Alarm States**: Supports Off, Home, Away, Arming, and Triggered states
+- **HomeKit Compatible**: Works seamlessly with Apple HomeKit integration
+- **Dashboard Ready**: Perfect for Home Assistant dashboards with alarm control panel card
 - **No External Dependencies**: Pure Home Assistant integration with no hardware requirements
 - **HACS Compatible**: Easy installation through HACS
 
@@ -31,23 +34,55 @@ A simplified Home Assistant integration that provides a synthetic alarm control 
 
 ## Configuration
 
-1. Go to Settings → Devices & Services
-2. Click "Add Integration"
-3. Search for "Synthetic Alarm Panel"
-4. Configure the following options:
-   - **Name**: Display name for your alarm panel
-   - **Code**: Optional security code (leave empty for no code)
-   - **Code arm required**: Whether code is needed to arm the system
-   - **Delay time**: Arming delay in seconds (0-300)
-   - **Trigger time**: How long alarm sounds when triggered (0-3600)
+The integration uses a 3-step configuration process:
+
+### Step 1: Basic Settings
+- **Name**: Display name for your alarm panel
+- **Code**: Optional security code (leave empty for no code)
+- **Code arm required**: Whether code is needed to arm the system
+- **Delay time**: Arming delay in seconds (0-300)
+- **Trigger time**: How long alarm sounds when triggered (0-3600)
+
+### Step 2: Script Configuration
+Configure scripts to execute when alarm state changes:
+- **Arm Home Script**: Script to run when arming in home mode
+- **Disarm Home Script**: Script to run when disarming from home mode
+- **Arm Away Script**: Script to run when arming in away mode
+- **Disarm Away Script**: Script to run when disarming from away mode
+
+### Step 3: Device Indicators
+Configure indicator devices (switches, lights, binary sensors):
+- **Armed Indicator**: Device to indicate armed status (turns on when armed)
+- **Alarm Indicator**: Device to indicate alarm triggered (turns on when alarm is triggered)
+
+All scripts and devices are optional - configure only what you need!
 
 ## Usage
 
 Once configured, the integration creates an alarm control panel entity that can be:
-- Added to your Lovelace dashboard
-- Used in automations
-- Controlled via services and scripts
-- Integrated with other Home Assistant components
+
+### Dashboard Integration
+- Add the **Alarm Control Panel** card to your Lovelace dashboard
+- Shows current state: Disarmed, Armed Home, Armed Away, Arming, Triggered
+- Provides arm/disarm controls with optional code entry
+- Works perfectly with Home Assistant's mobile app
+
+### HomeKit Integration
+- Automatically compatible with HomeKit integration
+- Appears as a security system in Apple Home app
+- Supports Siri voice control: "Hey Siri, arm the alarm" / "Hey Siri, disarm the alarm"
+- Shows correct status in HomeKit: Off, Home, Away
+
+### Automation Integration
+- Use in automations and scripts
+- Control via services: `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, `alarm_control_panel.alarm_disarm`
+- React to state changes with automation triggers
+- Access configured scripts and indicators through entity attributes
+
+### Real-World Integration
+- Connected scripts can control physical devices (lights, sirens, cameras)
+- Indicator devices provide visual feedback of alarm status
+- Perfect for creating a complete security system with existing HA devices
 
 ## Development
 

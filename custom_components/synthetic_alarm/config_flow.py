@@ -43,8 +43,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required("name", default="Synthetic Alarm"): cv.string,
-                    vol.Optional("code", default=""): cv.string,
-                    vol.Optional("code_arm_required", default=False): cv.boolean,
                     vol.Optional("delay_time", default=30): vol.All(
                         vol.Coerce(int), vol.Range(min=0, max=300)
                     ),

@@ -95,15 +95,13 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         _LOGGER.info("  - Disarm Home: %s", self._script_disarm_home)
         _LOGGER.info("  - Arm Away: %s", self._script_arm_away)
         _LOGGER.info("  - Disarm Away: %s", self._script_disarm_away)
-        _LOGGER.info("Configured indicators:")
-        _LOGGER.info("  - Armed Indicator: %s", self._armed_indicator)
-        _LOGGER.info("  - Alarm Indicator: %s", self._alarm_indicator)
+        _LOGGER.info("Configured input sensors (feedback from external system):")
+        _LOGGER.info("  - Armed Sensor: %s", self._armed_indicator)
+        _LOGGER.info("  - Alarm Sensor: %s", self._alarm_indicator)
         _LOGGER.info("Timing settings:")
         _LOGGER.info("  - Delay Time: %s seconds", self._delay_time)
         _LOGGER.info("  - Trigger Time: %s seconds", self._trigger_time)
         _LOGGER.info("Code requirement: DISABLED (no code needed)")
-        _LOGGER.info("Entity code_arm_required: %s", self.code_arm_required)
-        _LOGGER.info("Entity code_format: %s", self.code_format)
         
         # Verify script entities exist
         if self._script_arm_home and not self.hass.states.get(self._script_arm_home):
@@ -114,6 +112,28 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
             _LOGGER.warning("Arm Away script entity %s does not exist!", self._script_arm_away)
         if self._script_disarm_away and not self.hass.states.get(self._script_disarm_away):
             _LOGGER.warning("Disarm Away script entity %s does not exist!", self._script_disarm_away)
+        
+        # Set up state change listeners for binary sensors
+        if self._armed_indicator:
+            self.async_on_remove(
+                self.hass.helpers.event.async_track_state_change_event(
+                    [self._armed_indicator], self._sensor_state_changed
+                )
+            )
+        if self._alarm_indicator:
+            self.async_on_remove(
+                self.hass.helpers.event.async_track_state_change_event(
+                    [self._alarm_indicator], self._sensor_state_changed
+                )
+            )
+        
+        # Initial sensor state check
+        await self._monitor_sensors()
+
+    async def _sensor_state_changed(self, event) -> None:
+        """Handle sensor state changes."""
+        _LOGGER.info("Sensor state changed: %s", event.data)
+        await self._monitor_sensors()
 
     @property
     def state(self) -> AlarmControlPanelState:
@@ -169,44 +189,51 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
             _LOGGER.error("Failed to call script %s: %s", script_entity_id, err)
             _LOGGER.exception("Full exception details:")
 
-    async def _update_indicator(self, entity_id: str | None, turn_on: bool) -> None:
-        """Update an indicator device."""
-        _LOGGER.info("_update_indicator called for entity: %s, turn_on: %s", entity_id, turn_on)
-        
-        if not entity_id:
-            _LOGGER.info("No indicator entity configured, skipping")
-            return
-            
+    async def _monitor_sensors(self) -> None:
+        """Monitor binary sensors and update alarm state accordingly."""
         if not self._hass:
-            _LOGGER.error("HomeAssistant instance not available for indicator update")
             return
             
-        try:
-            domain = entity_id.split(".", 1)[0]
-            service = SERVICE_TURN_ON if turn_on else SERVICE_TURN_OFF
-            _LOGGER.info("Calling service %s.%s for entity %s", domain, service, entity_id)
-            
-            await self._hass.services.async_call(
-                domain,
-                service,
-                {"entity_id": entity_id},
-                blocking=False
-            )
-            _LOGGER.info("Successfully updated indicator %s: %s", entity_id, "ON" if turn_on else "OFF")
-        except Exception as err:
-            _LOGGER.error("Failed to update indicator %s: %s", entity_id, err)
-            _LOGGER.exception("Full exception details:")
-
-    async def _update_indicators(self) -> None:
-        """Update all indicator devices based on current state."""
-        is_armed = self._state in [
-            AlarmControlPanelState.ARMED_HOME,
-            AlarmControlPanelState.ARMED_AWAY,
-        ]
-        is_triggered = self._state == AlarmControlPanelState.TRIGGERED
+        # Check armed sensor
+        if self._armed_indicator:
+            armed_state = self._hass.states.get(self._armed_indicator)
+            if armed_state:
+                is_armed = armed_state.state == "on"
+                _LOGGER.info("Armed sensor %s state: %s (armed: %s)", self._armed_indicator, armed_state.state, is_armed)
+                
+                # Update alarm state based on sensor
+                if is_armed and self._state == AlarmControlPanelState.ARMING:
+                    # Transition from arming to armed (determine home vs away based on last command)
+                    if hasattr(self, '_pending_arm_mode'):
+                        self._state = self._pending_arm_mode
+                        delattr(self, '_pending_arm_mode')
+                    else:
+                        self._state = AlarmControlPanelState.ARMED_AWAY  # Default
+                    self.async_write_ha_state()
+                    _LOGGER.info("Transitioned to %s based on armed sensor", self._state)
+                elif not is_armed and self._state in [AlarmControlPanelState.ARMED_HOME, AlarmControlPanelState.ARMED_AWAY]:
+                    # Armed sensor went off, system is disarmed
+                    self._state = AlarmControlPanelState.DISARMED
+                    self.async_write_ha_state()
+                    _LOGGER.info("Transitioned to DISARMED based on armed sensor")
         
-        await self._update_indicator(self._armed_indicator, is_armed)
-        await self._update_indicator(self._alarm_indicator, is_triggered)
+        # Check alarm sensor
+        if self._alarm_indicator:
+            alarm_state = self._hass.states.get(self._alarm_indicator)
+            if alarm_state:
+                is_triggered = alarm_state.state == "on"
+                _LOGGER.info("Alarm sensor %s state: %s (triggered: %s)", self._alarm_indicator, alarm_state.state, is_triggered)
+                
+                if is_triggered and self._state != AlarmControlPanelState.TRIGGERED:
+                    # Alarm was triggered by external system
+                    self._state = AlarmControlPanelState.TRIGGERED
+                    self.async_write_ha_state()
+                    _LOGGER.info("Alarm TRIGGERED based on alarm sensor")
+                elif not is_triggered and self._state == AlarmControlPanelState.TRIGGERED:
+                    # Alarm sensor cleared, back to disarmed
+                    self._state = AlarmControlPanelState.DISARMED
+                    self.async_write_ha_state()
+                    _LOGGER.info("Alarm cleared, back to DISARMED based on alarm sensor")
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
@@ -225,14 +252,8 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         else:
             _LOGGER.info("No disarm script to call for previous state: %s", current_state)
         
-        # Change state after calling script
-        self._state = AlarmControlPanelState.DISARMED
-        self.async_write_ha_state()
-        _LOGGER.info("State changed to DISARMED")
-        
-        # Update indicators
-        _LOGGER.info("Updating indicators after disarm")
-        await self._update_indicators()
+        # Script will control external system, sensors will update our state
+        _LOGGER.info("Disarm script executed, waiting for sensor feedback to update state")
         _LOGGER.info("Disarm sequence complete")
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
@@ -240,6 +261,9 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         _LOGGER.info("async_alarm_arm_home called")
         
         _LOGGER.info("Starting arm home sequence, delay_time: %s", self._delay_time)
+        
+        # Set pending mode for sensor feedback
+        self._pending_arm_mode = AlarmControlPanelState.ARMED_HOME
         
         # Call arm home script IMMEDIATELY before any delays
         _LOGGER.info("Calling arm home script immediately: %s", self._script_arm_home)
@@ -250,19 +274,21 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
             self._state = AlarmControlPanelState.ARMING
             self.async_write_ha_state()
             
-            # Update indicators during arming
-            await self._update_indicators()
-            
-            # Wait for delay
+            # Wait for delay or sensor feedback
             await asyncio.sleep(self._delay_time)
+            
+            # If still arming after delay, check sensors or default to armed
+            if self._state == AlarmControlPanelState.ARMING:
+                await self._monitor_sensors()
+                # If still arming and no sensor feedback, assume success
+                if self._state == AlarmControlPanelState.ARMING:
+                    _LOGGER.info("No sensor feedback, defaulting to ARMED_HOME")
+                    self._state = AlarmControlPanelState.ARMED_HOME
+                    self.async_write_ha_state()
+        else:
+            # No delay, monitor sensors immediately
+            await self._monitor_sensors()
         
-        _LOGGER.info("Setting state to ARMED_HOME")
-        self._state = AlarmControlPanelState.ARMED_HOME
-        self.async_write_ha_state()
-        
-        # Update indicators after arming complete
-        _LOGGER.info("Updating indicators after arm home complete")
-        await self._update_indicators()
         _LOGGER.info("Arm home sequence complete")
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
@@ -270,6 +296,9 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         _LOGGER.info("async_alarm_arm_away called")
         
         _LOGGER.info("Starting arm away sequence, delay_time: %s", self._delay_time)
+        
+        # Set pending mode for sensor feedback
+        self._pending_arm_mode = AlarmControlPanelState.ARMED_AWAY
         
         # Call arm away script IMMEDIATELY before any delays
         _LOGGER.info("Calling arm away script immediately: %s", self._script_arm_away)
@@ -280,19 +309,21 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
             self._state = AlarmControlPanelState.ARMING
             self.async_write_ha_state()
             
-            # Update indicators during arming
-            await self._update_indicators()
-            
-            # Wait for delay
+            # Wait for delay or sensor feedback
             await asyncio.sleep(self._delay_time)
+            
+            # If still arming after delay, check sensors or default to armed
+            if self._state == AlarmControlPanelState.ARMING:
+                await self._monitor_sensors()
+                # If still arming and no sensor feedback, assume success
+                if self._state == AlarmControlPanelState.ARMING:
+                    _LOGGER.info("No sensor feedback, defaulting to ARMED_AWAY")
+                    self._state = AlarmControlPanelState.ARMED_AWAY
+                    self.async_write_ha_state()
+        else:
+            # No delay, monitor sensors immediately
+            await self._monitor_sensors()
         
-        _LOGGER.info("Setting state to ARMED_AWAY")
-        self._state = AlarmControlPanelState.ARMED_AWAY
-        self.async_write_ha_state()
-        
-        # Update indicators after arming complete
-        _LOGGER.info("Updating indicators after arm away complete")
-        await self._update_indicators()
         _LOGGER.info("Arm away sequence complete")
 
     async def async_alarm_trigger(self, code: str | None = None) -> None:

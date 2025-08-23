@@ -16,6 +16,7 @@ from homeassistant.components.alarm_control_panel.const import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.const import SERVICE_TURN_ON, SERVICE_TURN_OFF
 
 from .const import (
@@ -116,14 +117,14 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         # Set up state change listeners for binary sensors
         if self._armed_indicator:
             self.async_on_remove(
-                self.hass.helpers.event.async_track_state_change_event(
-                    [self._armed_indicator], self._sensor_state_changed
+                async_track_state_change_event(
+                    self.hass, [self._armed_indicator], self._sensor_state_changed
                 )
             )
         if self._alarm_indicator:
             self.async_on_remove(
-                self.hass.helpers.event.async_track_state_change_event(
-                    [self._alarm_indicator], self._sensor_state_changed
+                async_track_state_change_event(
+                    self.hass, [self._alarm_indicator], self._sensor_state_changed
                 )
             )
         

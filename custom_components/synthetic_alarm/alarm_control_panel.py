@@ -52,6 +52,8 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
     )
+    _attr_code_format = None
+    _attr_code_arm_required = False
 
     def __init__(self, entry_id: str, config: dict[str, Any]) -> None:
         """Initialize the alarm control panel."""
@@ -100,6 +102,8 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         _LOGGER.info("  - Delay Time: %s seconds", self._delay_time)
         _LOGGER.info("  - Trigger Time: %s seconds", self._trigger_time)
         _LOGGER.info("Code requirement: DISABLED (no code needed)")
+        _LOGGER.info("Entity code_arm_required: %s", self.code_arm_required)
+        _LOGGER.info("Entity code_format: %s", self.code_format)
         
         # Verify script entities exist
         if self._script_arm_home and not self.hass.states.get(self._script_arm_home):
@@ -120,6 +124,16 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
     def code_format(self) -> str | None:
         """Return the code format if a code is required."""
         return None  # No code required
+    
+    @property
+    def code_arm_required(self) -> bool:
+        """Return if the code is required for arming."""
+        return False
+    
+    @property 
+    def code_disarm_required(self) -> bool:
+        """Return if the code is required for disarming."""
+        return False
 
     async def _call_script(self, script_entity_id: str | None) -> None:
         """Call a script if configured."""

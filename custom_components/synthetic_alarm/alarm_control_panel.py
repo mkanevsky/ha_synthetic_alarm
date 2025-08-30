@@ -91,7 +91,7 @@ class SyntheticAlarmControlPanel(AlarmControlPanelEntity):
         
         # Log configuration for debugging
         _LOGGER.info("Synthetic Alarm Panel '%s' added to HA", self._attr_name)
-        _LOGGER.info("Configured scripts:")
+        _LOGGER.info("Configured scripts :")
         _LOGGER.info("  - Arm Home: %s", self._script_arm_home)
         _LOGGER.info("  - Disarm Home: %s", self._script_disarm_home)
         _LOGGER.info("  - Arm Away: %s", self._script_arm_away)

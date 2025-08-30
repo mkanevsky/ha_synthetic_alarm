@@ -1,6 +1,6 @@
 {
   "name": "Synthetic Alarm Panel",
-  "hacs": "1.6.0",
+  "hacs": "1.7.0",
   "domains": [
     "alarm_control_panel"
   ],
